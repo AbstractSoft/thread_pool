@@ -13,103 +13,105 @@
 #include <type_traits>
 #include <vector>
 
-namespace thread_pool {
-
-/// A fixed-size thread pool that executes tasks in the background.
-///
-/// Tasks are submitted via `submit()` which accepts any callable with any
-/// arguments. The pool forwards arguments perfectly and supports move-only
-/// types.
-///
-/// `wait_all()` blocks until all submitted tasks complete (up to a configurable
-/// timeout). `active_tasks()` returns the number of currently running tasks.
-///
-/// The pool is non-copyable and non-movable. Tasks submitted after `shutdown()`
-/// (via destructor) throw `std::runtime_error`.
-class ThreadPool {
-public:
-    /// Construct a thread pool with the given number of worker threads.
-    ///
-    /// @param num_threads  Number of worker threads. If 0, defaults to 8.
-    /// @param default_timeout  Default timeout for `wait_all()`.
-    explicit ThreadPool(std::size_t num_threads = 0,
-                        std::chrono::seconds default_timeout = std::chrono::hours(1));
-
-    ~ThreadPool();
-
-    /// Non-copyable, non-movable.
-    ThreadPool(const ThreadPool&) = delete;
-    ThreadPool& operator=(const ThreadPool&) = delete;
-    ThreadPool(ThreadPool&&) = delete;
-    ThreadPool& operator=(ThreadPool&&) = delete;
-
-    /// Submit a task to the pool.
-    ///
-    /// Accepts any callable `F` with arguments `Args...`. Arguments are perfectly
-    /// forwarded. The return type is deduced via `std::invoke_result_t`.
-    ///
-    /// @return A `std::future` that will hold the result when the task completes.
-    /// @throws std::runtime_error if the pool has been shut down.
-    template <typename F, typename... Args>
-    auto submit(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>>;
-
-    /// Block until all tasks complete. Uses the default timeout from construction.
-    void wait_all();
-
-    /// Block until all tasks complete or the timeout expires.
-    ///
-    /// @param timeout  Maximum time to wait.
-    void wait_all_with_timeout(std::chrono::seconds timeout);
-
-    /// Return the number of currently executing tasks.
-    ///
-    /// This is an atomic load — no mutex required.
-    std::size_t active_tasks() const;
-
-private:
-    void worker_loop();
-
-    std::vector<std::thread> workers_;
-    std::queue<std::function<void()>> tasks_;
-    std::mutex queue_mutex_;
-    std::condition_variable cv_;
-    std::condition_variable finished_cv_;
-    std::atomic<bool> stop_{false};
-    std::atomic<std::size_t> active_tasks_{0};
-    mutable std::mutex finished_mutex_;
-    std::chrono::seconds default_timeout_;
-};
-
-// ── Template implementation (must be in header) ────────────────────────────
-
-template <typename F, typename... Args>
-auto ThreadPool::submit(F&& f, Args&&... args)
-    -> std::future<std::invoke_result_t<F, Args...>>
+namespace thread_pool
 {
-    using return_type = std::invoke_result_t<F, Args...>;
-
-    auto task = std::make_shared<std::packaged_task<return_type()>>(
-        [f = std::forward<F>(f),
-         ...args_pack = std::forward<Args>(args)]() mutable {
-            return f(std::forward<Args>(args_pack)...);
-        }
-    );
-
-    std::future<return_type> result = task->get_future();
-
+    /// A fixed-size thread pool that executes tasks in the background.
+    ///
+    /// Tasks are submitted via `submit()` which accepts any callable with any
+    /// arguments. The pool forwards arguments perfectly and supports move-only
+    /// types.
+    ///
+    /// `wait_all()` blocks until all submitted tasks complete (up to a configurable
+    /// timeout). `active_tasks()` returns the number of currently running tasks.
+    ///
+    /// The pool is non-copyable and non-movable. Tasks submitted after `shutdown()`
+    /// (via destructor) throw `std::runtime_error`.
+    class ThreadPool
     {
-        std::lock_guard<std::mutex> lock{queue_mutex_};
-        if (stop_) {
-            throw std::runtime_error("Submit on stopped ThreadPool");
+    public:
+        /// Construct a thread pool with the given number of worker threads.
+        ///
+        /// @param num_threads  Number of worker threads. If 0, defaults to 8.
+        /// @param default_timeout  Default timeout for `wait_all()`.
+        explicit ThreadPool(std::size_t num_threads = 0,
+                            std::chrono::seconds default_timeout = std::chrono::hours(1));
+
+        ~ThreadPool();
+
+        /// Non-copyable, non-movable.
+        ThreadPool(const ThreadPool&) = delete;
+        ThreadPool& operator=(const ThreadPool&) = delete;
+        ThreadPool(ThreadPool&&) = delete;
+        ThreadPool& operator=(ThreadPool&&) = delete;
+
+        /// Submit a task to the pool.
+        ///
+        /// Accepts any callable `F` with arguments `Args...`. Arguments are perfectly
+        /// forwarded. The return type is deduced via `std::invoke_result_t`.
+        ///
+        /// @return A `std::future` that will hold the result when the task completes.
+        /// @throws std::runtime_error if the pool has been shut down.
+        template <typename F, typename... Args>
+        auto submit(F&& func, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>>;
+
+        /// Block until all tasks complete. Uses the default timeout from construction.
+        void wait_all();
+
+        /// Block until all tasks complete or the timeout expires.
+        ///
+        /// @param timeout  Maximum time to wait.
+        void wait_all_with_timeout(std::chrono::seconds timeout);
+
+        /// Return the number of currently executing tasks.
+        ///
+        /// This is an atomic load — no mutex required.
+        std::size_t active_tasks() const;
+
+    private:
+        void worker_loop();
+
+        std::vector<std::thread> workers_;
+        std::queue<std::function<void()>> tasks_;
+        std::mutex queue_mutex_;
+        std::condition_variable cv_;
+        std::condition_variable finished_cv_;
+        std::atomic<bool> stop_{false};
+        std::atomic<std::size_t> active_tasks_{0};
+        mutable std::mutex finished_mutex_;
+        std::chrono::seconds default_timeout_;
+    };
+
+    // ── Template implementation (must be in header) ────────────────────────────
+
+    template <typename F, typename... Args>
+    auto ThreadPool::submit(F&& func, Args&&... args)
+        -> std::future<std::invoke_result_t<F, Args...>>
+    {
+        using return_type = std::invoke_result_t<F, Args...>;
+
+        auto task = std::make_shared<std::packaged_task<return_type()>>(
+            [func = std::forward<F>(func),
+                ...args_pack = std::forward<Args>(args)]() mutable
+            {
+                return func(std::forward<Args>(args_pack)...);
+            }
+        );
+
+        std::future<return_type> result = task->get_future();
+
+        {
+            std::lock_guard<std::mutex> lock{queue_mutex_};
+            if (stop_)
+            {
+                throw std::runtime_error("Submit on stopped ThreadPool");
+            }
+            tasks_.emplace([task]() { (*task)(); });
         }
-        tasks_.emplace([task]() { (*task)(); });
+        cv_.notify_one();
+        finished_cv_.notify_all();
+
+        return result;
     }
-    cv_.notify_one();
-    finished_cv_.notify_all();
-
-    return result;
-}
-
 } // namespace thread_pool
 
 #endif // THREAD_POOL_HPP

@@ -1,0 +1,16 @@
+---
+Checks: >
+  -,
+  cppcoreguidelines-init-variables,
+  llvm-include-order,
+  readability-braces-around-statements,
+  readability-identifier-length
+
+CheckOptions:
+  - key: readability-identifier-length.MinimumIdentifierLength
+    value: 3
+
+HeaderFilterRegex: 'src/.*'
+ExcludeHeaderFilterRegex: '(_deps/|_builds/|/usr/|/Library/)'
+FormatStyle: none
+...

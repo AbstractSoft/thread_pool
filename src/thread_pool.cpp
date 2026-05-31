@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "thread_pool/thread_pool.hpp"
+#include "thread_pool.hpp"
 #include <iostream>
 
 namespace thread_pool

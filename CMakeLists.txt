@@ -68,7 +68,7 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 # Copy header to output directory alongside the library
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/thread_pool/thread_pool.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/thread_pool.hpp"
         "${OUTPUT_DIR}/thread_pool.hpp"
 )
 

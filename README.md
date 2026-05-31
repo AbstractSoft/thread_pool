@@ -28,7 +28,7 @@ Add via FetchContent in CMake:
 ```cmake
 FetchContent_Declare(
     thread_pool
-    GIT_REPOSITORY https://github.com/<user>/thread-pool.git
+    GIT_REPOSITORY https://github.com/AbstractSoft/thread_pool.git
     GIT_TAG <tag>
 )
 FetchContent_MakeAvailable(thread_pool)

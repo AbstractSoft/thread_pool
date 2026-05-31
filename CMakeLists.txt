@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.27)
 project(thread_pool VERSION 1.0.0 LANGUAGES CXX)
 
+set(CMAKE_PROJECT_HOMEPAGE_URL "https://github.com/AbstractSoft/thread_pool")
+set(CMAKE_PROJECT_DESCRIPTION "A minimal, zero-dependency C++ thread pool library")
+set(CMAKE_PROJECT_COPYRIGHT "Copyright (C) 2026 Eduard Ghergu, PhD <eduard.ghergu@professional-programmer.com>")
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -84,6 +88,10 @@ install(EXPORT ${PROJECT_NAME}-targets
     FILE ${PROJECT_NAME}-targets.cmake
     NAMESPACE ${PROJECT_NAME}::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+)
+
+install(FILES LICENSE
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
 # ── Tests ──────────────────────────────────────────────────────────────────

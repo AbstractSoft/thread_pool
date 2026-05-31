@@ -17,6 +17,7 @@ Enable sanitizers (Debug only): `-DENABLE_SANITIZERS=ON` — adds AddressSanitiz
 - **Header**: `include/thread_pool/thread_pool.hpp` — class declaration + template `submit()` implementation
 - **Source**: `src/thread_pool.cpp` — non-template methods (constructor, destructor, `worker_loop`, `wait_all`, `active_tasks`)
 - **Tests**: `tests/thread_pool_tests.cpp` — GoogleTest/GMock test suite (22 tests), fetched via FetchContent
+- **Output**: `out/<Debug|Release>/` — contains `libthread_pool.a`, `thread_pool.hpp` (flat), and test binaries
 
 ## Gotchas
 
@@ -28,3 +29,4 @@ Enable sanitizers (Debug only): `-DENABLE_SANITIZERS=ON` — adds AddressSanitiz
 - Clang-tidy config (`.clang-tidy`) only applies `cppcoreguidelines-init-variables`, `llvm-include-order`, `readability-braces-around-statements`, and `readability-identifier-length` — no formatting, no broad check enable
 - `CppCoreGuidelines.md` is included as a reference but is not enforced by tooling
 - Tests use GoogleTest/GoogleMock (fetched via FetchContent, tag v1.14.0); clean the build dir if switching generators
+- `CMAKE_EXPORT_COMPILE_COMMANDS` is ON — `compile_commands.json` is generated for clangd LSP

@@ -78,8 +78,9 @@ namespace thread_pool
         /// @param timeout  Maximum time to wait.
         void wait_all_with_timeout(std::chrono::seconds timeout);
 
-        /// Return the number of currently executing tasks.
+        /// Return the number of tasks currently being executed by worker threads.
         ///
+        /// This does not include tasks that are queued but not yet picked up.
         /// This is an atomic load — no mutex required.
         std::size_t active_tasks() const;
 
@@ -124,7 +125,6 @@ namespace thread_pool
             tasks_.emplace([task]() { (*task)(); });
         }
         cv_.notify_one();
-        finished_cv_.notify_all();
 
         return result;
     }

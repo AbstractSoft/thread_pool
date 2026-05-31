@@ -71,11 +71,11 @@ namespace thread_pool
 
                 task = std::move(tasks_.front());
                 tasks_.pop();
+                ++active_tasks_; // increment while queue_mutex_ is held so
+                // wait_all() cannot observe active_tasks_==0
+                // && tasks_.empty() between the pop and the
+                // increment (which would be a false "all done").
             }
-            // queue_mutex_ released before touching active_tasks_ — eliminates
-            // the inconsistent lock-ordering that caused deadlocks.
-
-            ++active_tasks_; // atomic — no mutex needed
 
             try
             {

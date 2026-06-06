@@ -63,7 +63,7 @@ target_include_directories(${PROJECT_NAME}
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
 
 # Copy header to output directory alongside the library
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
@@ -80,7 +80,7 @@ install(TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(DIRECTORY include/thread_pool
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/thread_pool.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 

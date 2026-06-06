@@ -14,7 +14,7 @@ Enable sanitizers (Debug only): `-DENABLE_SANITIZERS=ON` — adds AddressSanitiz
 
 ## Architecture
 
-- **Header**: `include/thread_pool/thread_pool.hpp` — class declaration + template `submit()` implementation
+- **Header**: `include/thread_pool.hpp` — class declaration + template `submit()` implementation
 - **Source**: `src/thread_pool.cpp` — non-template methods (constructor, destructor, `worker_loop`, `wait_all`, `active_tasks`)
 - **Tests**: `tests/thread_pool_tests.cpp` — GoogleTest/GMock test suite (22 tests), fetched via FetchContent
 - **Output**: `out/<Debug|Release>/` — contains `libthread_pool.a`, `thread_pool.hpp` (flat), and test binaries
@@ -30,3 +30,6 @@ Enable sanitizers (Debug only): `-DENABLE_SANITIZERS=ON` — adds AddressSanitiz
 - `CppCoreGuidelines.md` is included as a reference but is not enforced by tooling
 - Tests use GoogleTest/GoogleMock (fetched via FetchContent, tag v1.14.0); clean the build dir if switching generators
 - `CMAKE_EXPORT_COMPILE_COMMANDS` is ON — `compile_commands.json` is generated for clangd LSP
+- Version tag is `v1.0.0`; update `CMakeLists.txt` project version and git tag for new releases
+- All source files carry Apache 2.0 license header; `LICENSE` file at repo root
+- Article at `article/thread_pool_article.md` explains the implementation in student-friendly terms

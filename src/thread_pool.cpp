@@ -101,6 +101,9 @@ namespace thread_pool
         if (!completed)
         {
 #ifndef THREAD_POOL_SILENT
+            // Note: the two atomic loads below are not a single atomic snapshot.
+            // A task could finish between them, making the count transiently
+            // inconsistent — acceptable for a diagnostic message.
             std::cerr << "ThreadPool::wait_all timed out after " << timeout.count()
                 << " seconds — " << active_task_count_.load() << " tasks still active, "
                 << (pending_tasks_.load() - active_task_count_.load()) << " queued\n";

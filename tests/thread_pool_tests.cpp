@@ -252,6 +252,8 @@ TEST(ThreadPoolTest, PoolContinuesAfterTaskException) {
 }
 
 TEST(ThreadPoolTest, NestedSubmit) {
+    // Requires pool size >= 2: the outer task blocks a worker on inner.get(),
+    // and a second worker must be available to execute the inner task.
     thread_pool::ThreadPool pool{2};
     std::atomic<int> result{0};
 
@@ -298,7 +300,10 @@ TEST(ThreadPoolTest, SequentialExecutionOrder) {
     }
 
     pool.wait_all();
-    EXPECT_EQ(order.size(), 5);
+    ASSERT_EQ(order.size(), 5);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(order[i], i);
+    }
 }
 
 TEST(ThreadPoolTest, SumReduction) {

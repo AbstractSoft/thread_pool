@@ -26,6 +26,7 @@
 #include <queue>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -93,7 +94,8 @@ namespace thread_pool
         std::condition_variable cv_;
         std::condition_variable finished_cv_;
         std::atomic<bool> stop_{false};
-        std::atomic<std::size_t> active_tasks_{0};
+        std::atomic<std::size_t> active_task_count_{0};
+        std::atomic<std::size_t> pending_tasks_{0};
         mutable std::mutex finished_mutex_;
         std::chrono::seconds default_timeout_;
     };
@@ -106,11 +108,12 @@ namespace thread_pool
     {
         using return_type = std::invoke_result_t<F, Args...>;
 
+        auto args_tuple = std::make_tuple(std::forward<Args>(args)...);
         auto task = std::make_shared<std::packaged_task<return_type()>>(
             [func = std::forward<F>(func),
-                ...args_pack = std::forward<Args>(args)]() mutable
+                args_tuple = std::move(args_tuple)]() mutable
             {
-                return func(std::forward<Args>(args_pack)...);
+                return std::apply(std::move(func), std::move(args_tuple));
             }
         );
 
@@ -122,6 +125,7 @@ namespace thread_pool
             {
                 throw std::runtime_error("Submit on stopped ThreadPool");
             }
+            ++pending_tasks_;
             tasks_.emplace([task]() { (*task)(); });
         }
         cv_.notify_one();

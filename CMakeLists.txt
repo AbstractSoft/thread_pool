@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.27)
-project(thread_pool VERSION 1.0.0 LANGUAGES CXX)
-
-set(CMAKE_PROJECT_HOMEPAGE_URL "https://github.com/AbstractSoft/thread_pool")
-set(CMAKE_PROJECT_DESCRIPTION "A minimal, zero-dependency C++ thread pool library")
-set(CMAKE_PROJECT_COPYRIGHT "Copyright (C) 2026 Eduard Ghergu, PhD <eduard.ghergu@professional-programmer.com>")
+project(thread_pool
+    VERSION 1.0.2
+    DESCRIPTION "A minimal, zero-dependency C++ thread pool library"
+    HOMEPAGE_URL "https://github.com/AbstractSoft/thread_pool"
+    LANGUAGES CXX
+)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,13 +17,8 @@ option(ENABLE_SANITIZERS "Enable sanitizers for Debug builds" OFF)
 
 if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Enabling sanitizers for Debug build")
-    set(SANITIZER_FLAGS "-fsanitize=address,undefined -fno-omit-frame-pointer")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SANITIZER_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZER_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${SANITIZER_FLAGS}")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SANITIZER_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -O0 -g)
+    add_link_options(-fsanitize=address,undefined)
 endif()
 
 # Output directory: out/<Debug|Release>/
@@ -119,7 +115,6 @@ if(BUILD_TESTS)
     target_link_libraries(thread_pool_tests PRIVATE
         ${PROJECT_NAME}
         GTest::gtest_main
-        GTest::gmock_main
     )
 
     target_include_directories(thread_pool_tests PRIVATE

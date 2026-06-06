@@ -71,34 +71,15 @@ namespace thread_pool
 
                 task = std::move(tasks_.front());
                 tasks_.pop();
-                ++active_tasks_; // increment while queue_mutex_ is held so
-                // wait_all() cannot observe active_tasks_==0
-                // && tasks_.empty() between the pop and the
-                // increment (which would be a false "all done").
+                ++active_task_count_;
             }
 
-            try
-            {
-                task();
-            }
-            catch (const std::exception& e)
-            {
-#ifndef THREAD_POOL_SILENT
-                std::cerr << "ThreadPool: task threw std::exception: " << e.what() << '\n';
-#endif
-            }
-            catch (...)
-            {
-#ifndef THREAD_POOL_SILENT
-                std::cerr << "ThreadPool: task threw unknown exception\n";
-#endif
-            }
+            task();
 
-            // Decrement and notify while holding finished_mutex_ so wait_all()
-            // cannot miss the wakeup between the predicate check and the wait call.
             {
                 std::lock_guard<std::mutex> lock{finished_mutex_};
-                --active_tasks_;
+                --active_task_count_;
+                --pending_tasks_;
             }
             finished_cv_.notify_all();
         }
@@ -114,23 +95,21 @@ namespace thread_pool
         std::unique_lock<std::mutex> lock{finished_mutex_};
         bool completed = finished_cv_.wait_for(lock, timeout, [this]
         {
-            std::lock_guard<std::mutex> q_lock{queue_mutex_};
-            return active_tasks_ == 0 && tasks_.empty();
+            return active_task_count_ == 0 && pending_tasks_ == 0;
         });
 
         if (!completed)
         {
-            std::lock_guard<std::mutex> q_lock{queue_mutex_};
 #ifndef THREAD_POOL_SILENT
             std::cerr << "ThreadPool::wait_all timed out after " << timeout.count()
-                << " seconds — " << active_tasks_.load() << " tasks still active, "
-                << tasks_.size() << " queued\n";
+                << " seconds — " << active_task_count_.load() << " tasks still active, "
+                << (pending_tasks_.load() - active_task_count_.load()) << " queued\n";
 #endif
         }
     }
 
     std::size_t ThreadPool::active_tasks() const
     {
-        return active_tasks_; // atomic load — no mutex needed
+        return active_task_count_; // atomic load — no mutex needed
     }
 } // namespace thread_pool

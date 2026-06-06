@@ -18,13 +18,13 @@
 #include <chrono>
 #include <cmath>
 #include <future>
+#include <latch>
 #include <numeric>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
 
 #include "thread_pool.hpp"
 
@@ -206,13 +206,15 @@ TEST(ThreadPoolTest, NoTasksWaitAll) {
 
 TEST(ThreadPoolTest, ActiveTasksDuringExecution) {
     thread_pool::ThreadPool pool{1};
+    std::latch started{1};
 
-    auto future1 = pool.submit([] {
+    auto future1 = pool.submit([&started] {
+        started.count_down();
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         return 1;
     });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    started.wait();
     EXPECT_EQ(pool.active_tasks(), 1);
 
     future1.get();
@@ -230,6 +232,36 @@ TEST(ThreadPoolTest, TaskWithException) {
     });
 
     EXPECT_THROW(future.get(), std::runtime_error);
+}
+
+TEST(ThreadPoolTest, PoolContinuesAfterTaskException) {
+    thread_pool::ThreadPool pool{2};
+
+    auto future1 = pool.submit([] {
+        throw std::runtime_error("task failure");
+    });
+
+    auto future2 = pool.submit([] { return 42; });
+
+    EXPECT_THROW(future1.get(), std::runtime_error);
+    EXPECT_EQ(future2.get(), 42);
+    EXPECT_EQ(pool.active_tasks(), 0);
+
+    auto future3 = pool.submit([] { return 100; });
+    EXPECT_EQ(future3.get(), 100);
+}
+
+TEST(ThreadPoolTest, NestedSubmit) {
+    thread_pool::ThreadPool pool{2};
+    std::atomic<int> result{0};
+
+    auto future = pool.submit([&pool, &result] {
+        auto inner = pool.submit([] { return 7; });
+        result = inner.get();
+    });
+
+    future.get();
+    EXPECT_EQ(result, 7);
 }
 
 // ── Concurrency ────────────────────────────────────────────────────────────

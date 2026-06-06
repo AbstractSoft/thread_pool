@@ -28,8 +28,8 @@ Enable sanitizers (Debug only): `-DENABLE_SANITIZERS=ON` — adds AddressSanitiz
 - `THREAD_POOL_SILENT` macro silences stderr output from the pool
 - Clang-tidy config (`.clang-tidy`) only applies `cppcoreguidelines-init-variables`, `llvm-include-order`, `readability-braces-around-statements`, and `readability-identifier-length` — no formatting, no broad check enable
 - `CppCoreGuidelines.md` is included as a reference but is not enforced by tooling
-- Tests use GoogleTest/GoogleMock (fetched via FetchContent, tag v1.14.0); clean the build dir if switching generators
+- Tests use GoogleTest (fetched via FetchContent, tag v1.14.0); clean the build dir if switching generators
 - `CMAKE_EXPORT_COMPILE_COMMANDS` is ON — `compile_commands.json` is generated for clangd LSP
-- Version tag is `v1.0.2`; update `CMakeLists.txt` project version and git tag for new releases
+- Version tag is `v1.0.3`; update `CMakeLists.txt` project version and git tag for new releases
 - All source files carry Apache 2.0 license header; `LICENSE` file at repo root
 - Article at `article/thread_pool_article.md` explains the implementation in student-friendly terms

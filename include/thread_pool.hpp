@@ -95,7 +95,11 @@ namespace thread_pool
         std::condition_variable finished_cv_;
         std::atomic<bool> stop_{false};
         std::atomic<std::size_t> active_task_count_{0};
+        // Incremented under queue_mutex_ (submit), decremented under
+        // finished_mutex_ (worker_loop). Only read while holding
+        // finished_mutex_ (wait_all predicate), so the asymmetry is safe.
         std::atomic<std::size_t> pending_tasks_{0};
+        // mutable to allow const wait_all overloads in the future
         mutable std::mutex finished_mutex_;
         std::chrono::seconds default_timeout_;
     };

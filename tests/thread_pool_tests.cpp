@@ -266,6 +266,35 @@ TEST(ThreadPoolTest, NestedSubmit) {
     EXPECT_EQ(result, 7);
 }
 
+// ── Clear Pending ────────────────────────────────────────────────────────────
+
+TEST(ThreadPoolTest, ClearPending) {
+    thread_pool::ThreadPool pool{1};
+    std::latch started{1};
+
+    auto slow = pool.submit([&started] {
+        started.count_down();
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    });
+
+    started.wait(); // slow task is running, worker is busy
+
+    // These queue up because the single worker is blocked
+    std::vector<std::future<void>> futures;
+    for (int i = 0; i < 5; ++i) {
+        futures.push_back(pool.submit([] { /* should be cleared */ }));
+    }
+
+    EXPECT_EQ(pool.clear_pending(), 5);
+
+    slow.get();
+    pool.wait_all(); // returns immediately — no pending tasks left
+
+    // Pool should still accept new tasks after clearing
+    auto result = pool.submit([] { return 42; });
+    EXPECT_EQ(result.get(), 42);
+}
+
 // ── Concurrency ────────────────────────────────────────────────────────────
 
 TEST(ThreadPoolTest, ConcurrentSubmissions) {
@@ -287,6 +316,8 @@ TEST(ThreadPoolTest, ConcurrentSubmissions) {
 }
 
 TEST(ThreadPoolTest, SequentialExecutionOrder) {
+    // This test asserts FIFO order with 1 worker. This holds for the current
+    // std::queue-based implementation but is not a documented contract.
     thread_pool::ThreadPool pool{1};
     std::vector<int> order;
     std::mutex order_mutex;

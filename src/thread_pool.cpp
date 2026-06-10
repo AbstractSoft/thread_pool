@@ -15,7 +15,6 @@
  */
 
 #include "thread_pool.hpp"
-#include <iostream>
 
 namespace thread_pool
 {
@@ -24,7 +23,7 @@ namespace thread_pool
         constexpr std::size_t default_num_threads = 8;
     } // namespace
 
-    ThreadPool::ThreadPool(std::size_t num_threads, std::chrono::seconds default_timeout)
+    ThreadPool::ThreadPool(std::size_t num_threads, const std::chrono::seconds default_timeout)
         : default_timeout_{default_timeout}
     {
         if (num_threads == 0)
@@ -32,7 +31,7 @@ namespace thread_pool
             num_threads = default_num_threads;
         }
         workers_.reserve(num_threads);
-        for (std::size_t i = 0; i < num_threads; ++i)
+        for (std::size_t idx = 0; idx < num_threads; ++idx)
         {
             workers_.emplace_back([this] { worker_loop(); });
         }
@@ -41,7 +40,7 @@ namespace thread_pool
     ThreadPool::~ThreadPool()
     {
         {
-            std::lock_guard<std::mutex> lock{queue_mutex_};
+            std::lock_guard lock{queue_mutex_};
             stop_ = true;
         }
         cv_.notify_all();
@@ -55,29 +54,44 @@ namespace thread_pool
         }
     }
 
+    std::optional<std::function<void()>> ThreadPool::pop_task()
+    {
+        std::unique_lock lock{queue_mutex_};
+        cv_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
+
+        if (stop_ && tasks_.empty())
+        {
+            return std::nullopt;
+        }
+
+        auto task = std::move(tasks_.front());
+        tasks_.pop();
+        ++active_task_count_;
+        return task;
+    }
+
     void ThreadPool::worker_loop()
     {
         while (true)
         {
-            std::function<void()> task;
+            auto opt = pop_task();
+            if (!opt) return;
+
+            try
             {
-                std::unique_lock<std::mutex> lock{queue_mutex_};
-                cv_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
-
-                if (stop_ && tasks_.empty())
-                {
-                    return;
-                }
-
-                task = std::move(tasks_.front());
-                tasks_.pop();
-                ++active_task_count_;
+                (*opt)();
+            }
+            catch (...)
+            {
+                // packaged_task::operator() stores user exceptions in the
+                // future and does not rethrow. A std::future_error (e.g.
+                // promise_already_satisfied, no_state) could be thrown if
+                // the packaged_task is invoked twice or has no shared state.
+                // Catch everything to prevent counter leaks and worker death.
             }
 
-            task();
-
             {
-                std::lock_guard<std::mutex> lock{finished_mutex_};
+                std::lock_guard lock{finished_mutex_};
                 --active_task_count_;
                 --pending_tasks_;
             }
@@ -90,29 +104,24 @@ namespace thread_pool
         wait_all_with_timeout(default_timeout_);
     }
 
-    void ThreadPool::wait_all_with_timeout(std::chrono::seconds timeout)
+    std::size_t ThreadPool::clear_pending()
     {
-        std::unique_lock<std::mutex> lock{finished_mutex_};
-        bool completed = finished_cv_.wait_for(lock, timeout, [this]
+        std::size_t count;
         {
-            return active_task_count_ == 0 && pending_tasks_ == 0;
-        });
-
-        if (!completed)
-        {
-#ifndef THREAD_POOL_SILENT
-            // Note: the two atomic loads below are not a single atomic snapshot.
-            // A task could finish between them, making the count transiently
-            // inconsistent — acceptable for a diagnostic message.
-            std::cerr << "ThreadPool::wait_all timed out after " << timeout.count()
-                << " seconds — " << active_task_count_.load() << " tasks still active, "
-                << (pending_tasks_.load() - active_task_count_.load()) << " queued\n";
-#endif
+            std::lock_guard lock{queue_mutex_};
+            count = tasks_.size();
+            tasks_ = {};
         }
+        {
+            std::lock_guard lock{finished_mutex_};
+            pending_tasks_ -= count;
+        }
+        finished_cv_.notify_all();
+        return count;
     }
 
-    std::size_t ThreadPool::active_tasks() const
+    std::size_t ThreadPool::active_tasks() const noexcept
     {
-        return active_task_count_; // atomic load — no mutex needed
+        return active_task_count_;
     }
 } // namespace thread_pool

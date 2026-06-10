@@ -8,7 +8,7 @@ A minimal, zero-dependency C++ thread pool library.
 - `wait_all()` / `wait_all_with_timeout()` — block until all tasks complete
 - `active_tasks()` — query running task count
 - Thread-safe, move-only, non-copyable
-- C++20 compatible (works with C++23 too)
+- C++17 compatible (C++23 build enforced by CMakeLists.txt)
 
 ## Usage
 

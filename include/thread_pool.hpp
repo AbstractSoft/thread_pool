@@ -22,7 +22,9 @@
 #include <condition_variable>
 #include <functional>
 #include <future>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <stdexcept>
 #include <thread>
@@ -40,6 +42,9 @@ namespace thread_pool
     ///
     /// `wait_all()` blocks until all submitted tasks complete (up to a configurable
     /// timeout). `active_tasks()` returns the number of currently running tasks.
+    ///
+    /// @note Tasks must eventually return. The pool does not detect or recover
+    ///       from hung workers. If all threads become stuck the pool deadlocks.
     ///
     /// The pool is non-copyable and non-movable. Tasks submitted after `shutdown()`
     /// (via destructor) throw `std::runtime_error`.
@@ -66,6 +71,10 @@ namespace thread_pool
         /// Accepts any callable `F` with arguments `Args...`. Arguments are perfectly
         /// forwarded. The return type is deduced via `std::invoke_result_t`.
         ///
+        /// @note Calling submit() from inside a task requires at least 2 worker
+        ///       threads, otherwise the inner task can never start and the pool
+        ///       deadlocks.
+        ///
         /// @return A `std::future` that will hold the result when the task completes.
         /// @throws std::runtime_error if the pool has been shut down.
         template <typename F, typename... Args>
@@ -76,16 +85,26 @@ namespace thread_pool
 
         /// Block until all tasks complete or the timeout expires.
         ///
+        /// @tparam Rep  Tick type of the duration.
+        /// @tparam Period  Tick period of the duration.
         /// @param timeout  Maximum time to wait.
-        void wait_all_with_timeout(std::chrono::seconds timeout);
+        template <typename Rep, typename Period>
+        void wait_all_with_timeout(std::chrono::duration<Rep, Period> timeout);
+
+        /// Remove all queued (not yet started) tasks from the pool.
+        ///
+        /// @return The number of tasks removed.
+        std::size_t clear_pending();
 
         /// Return the number of tasks currently being executed by worker threads.
         ///
         /// This does not include tasks that are queued but not yet picked up.
         /// This is an atomic load — no mutex required.
-        std::size_t active_tasks() const;
+        std::size_t active_tasks() const noexcept;
 
     private:
+        std::optional<std::function<void()>> pop_task();
+
         void worker_loop();
 
         std::vector<std::thread> workers_;
@@ -135,6 +154,16 @@ namespace thread_pool
         cv_.notify_one();
 
         return result;
+    }
+
+    template <typename Rep, typename Period>
+    void ThreadPool::wait_all_with_timeout(std::chrono::duration<Rep, Period> timeout)
+    {
+        std::unique_lock<std::mutex> lock{finished_mutex_};
+        finished_cv_.wait_for(lock, timeout, [this]
+        {
+            return active_task_count_ == 0 && pending_tasks_ == 0;
+        });
     }
 } // namespace thread_pool
 

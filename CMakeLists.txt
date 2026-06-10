@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.27)
 project(thread_pool
-    VERSION 1.0.2
+    VERSION 1.0.5
     DESCRIPTION "A minimal, zero-dependency C++ thread pool library"
     HOMEPAGE_URL "https://github.com/AbstractSoft/thread_pool"
     LANGUAGES CXX

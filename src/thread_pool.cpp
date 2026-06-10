@@ -120,6 +120,7 @@ namespace thread_pool
         const std::size_t count = tasks_.size();
         tasks_ = {};
         pending_tasks_ -= count;
+        cv_.notify_all();
         finished_cv_.notify_all();
         return count;
     }

@@ -104,6 +104,8 @@ namespace thread_pool
 
         /// Remove all queued (not yet started) tasks from the pool.
         ///
+        /// Already-executing tasks are unaffected.
+        ///
         /// @warning Futures obtained from `submit()` for cleared tasks will
         ///          throw `std::future_error` (broken_promise) on `.get()`.
         ///
@@ -132,8 +134,7 @@ namespace thread_pool
         // finished_mutex_ (worker_loop). Only read while holding
         // finished_mutex_ (wait_all predicate), so the asymmetry is safe.
         std::atomic<std::size_t> pending_tasks_{0};
-        // mutable to allow const wait_all overloads in the future
-        mutable std::mutex finished_mutex_;
+        std::mutex finished_mutex_;
         std::chrono::seconds default_timeout_;
     };
 

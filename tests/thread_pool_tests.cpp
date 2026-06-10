@@ -341,6 +341,91 @@ TEST(ThreadPoolTest, ActiveTasksNeverExceedsThreadCount) {
     EXPECT_LE(max_seen.load(), N);
 }
 
+// ── Default Timeout ─────────────────────────────────────────────────────────
+
+TEST(ThreadPoolTest, DefaultTimeoutExpires) {
+    // Zero-second default timeout — wait_all() should return immediately
+    thread_pool::ThreadPool pool{1, std::chrono::seconds{0}};
+
+    auto future = pool.submit([] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        return 42;
+    });
+
+    auto start = std::chrono::steady_clock::now();
+    pool.wait_all();
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    EXPECT_LT(elapsed, std::chrono::milliseconds(100));
+    // Future not yet ready since wait_all returned early due to timeout
+    EXPECT_EQ(future.wait_for(std::chrono::seconds(0)), std::future_status::timeout);
+
+    // Task eventually completes on its own
+    EXPECT_EQ(future.get(), 42);
+}
+
+TEST(ThreadPoolTest, MultipleWaitAllCalls) {
+    thread_pool::ThreadPool pool{2};
+    std::atomic<int> counter{0};
+
+    for (int i = 0; i < 5; ++i) {
+        pool.submit([&counter] {
+            ++counter;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        });
+    }
+
+    pool.wait_all();
+    EXPECT_EQ(counter, 5);
+
+    // Second call should return immediately
+    auto start = std::chrono::steady_clock::now();
+    pool.wait_all();
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_LT(elapsed, std::chrono::milliseconds(100));
+}
+
+TEST(ThreadPoolTest, WaitAllWithMilliseconds) {
+    thread_pool::ThreadPool pool{2, std::chrono::seconds(5)};
+    std::atomic<int> counter{0};
+
+    for (int i = 0; i < 3; ++i) {
+        pool.submit([&counter] {
+            ++counter;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        });
+    }
+
+    pool.wait_all_with_timeout(std::chrono::milliseconds(2000));
+    EXPECT_EQ(counter, 3);
+}
+
+TEST(ThreadPoolTest, ClearPendingWithRunningTasks) {
+    thread_pool::ThreadPool pool{2};
+    std::latch started{1};
+
+    auto slow = pool.submit([&started] {
+        started.count_down();
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    });
+    started.wait();
+
+    // Submit a batch; some may start, some queue
+    auto q1 = pool.submit([] { return 1; });
+    auto q2 = pool.submit([] { return 2; });
+    pool.clear_pending();
+
+    // slow task is still running
+    EXPECT_GE(pool.active_tasks(), 1);
+
+    // wait_all should only wait for the running task(s)
+    auto start = std::chrono::steady_clock::now();
+    pool.wait_all();
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_LT(elapsed, std::chrono::seconds(1));
+    EXPECT_EQ(pool.active_tasks(), 0);
+}
+
 // ── Concurrency ────────────────────────────────────────────────────────────
 
 TEST(ThreadPoolTest, ConcurrentSubmissions) {

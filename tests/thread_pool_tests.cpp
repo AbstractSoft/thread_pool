@@ -447,8 +447,7 @@ TEST(ThreadPoolTest, ConcurrentSubmissions) {
 }
 
 TEST(ThreadPoolTest, SequentialExecutionOrder) {
-    // This test asserts FIFO order with 1 worker. This holds for the current
-    // std::queue-based implementation but is not a documented contract.
+    // FIFO order with a single worker is a documented contract.
     thread_pool::ThreadPool pool{1};
     std::vector<int> order;
     std::mutex order_mutex;

@@ -82,6 +82,9 @@ namespace thread_pool
         /// Accepts any callable `F` with arguments `Args...`. Arguments are perfectly
         /// forwarded. The return type is deduced via `std::invoke_result_t`.
         ///
+        /// @note Tasks are executed in FIFO order when a single worker is used.
+        ///       With multiple workers the execution order is unspecified.
+        ///
         /// @note Calling submit() from inside a task requires at least 2 worker
         ///       threads, otherwise the inner task can never start and the pool
         ///       deadlocks.

@@ -47,7 +47,10 @@ namespace thread_pool
     ///       from hung workers. If all threads become stuck the pool deadlocks.
     ///
     /// The pool is non-copyable and non-movable. Tasks submitted after `shutdown()`
-    /// (via destructor) throw `std::runtime_error`.
+    /// throw `std::runtime_error`.
+    ///
+    /// @note The destructor and `shutdown()` drain queued tasks before workers
+    ///       exit. Already-queued tasks always complete normally.
     class ThreadPool
     {
     public:
@@ -56,9 +59,17 @@ namespace thread_pool
         /// @param num_threads  Number of worker threads. If 0, defaults to 8.
         /// @param default_timeout  Default timeout for `wait_all()`.
         explicit ThreadPool(std::size_t num_threads = 0,
-                            std::chrono::seconds default_timeout = std::chrono::hours(1));
+                            std::chrono::seconds default_timeout = std::chrono::seconds{3600});
 
         ~ThreadPool();
+
+        /// Stop accepting new tasks and join all worker threads.
+        ///
+        /// Queued tasks complete before the workers exit. After shutdown the
+        /// pool is inert: `submit()` throws, `wait_all()` returns immediately,
+        /// `clear_pending()` returns 0, and `active_tasks()` returns 0.
+        /// Calling `shutdown()` more than once is safe.
+        void shutdown();
 
         /// Non-copyable, non-movable.
         ThreadPool(const ThreadPool&) = delete;
@@ -93,6 +104,9 @@ namespace thread_pool
 
         /// Remove all queued (not yet started) tasks from the pool.
         ///
+        /// @warning Futures obtained from `submit()` for cleared tasks will
+        ///          throw `std::future_error` (broken_promise) on `.get()`.
+        ///
         /// @return The number of tasks removed.
         std::size_t clear_pending();
 
@@ -123,8 +137,6 @@ namespace thread_pool
         std::chrono::seconds default_timeout_;
     };
 
-    // ── Template implementation (must be in header) ────────────────────────────
-
     template <typename F, typename... Args>
     auto ThreadPool::submit(F&& func, Args&&... args)
         -> std::future<std::invoke_result_t<F, Args...>>
@@ -143,13 +155,13 @@ namespace thread_pool
         std::future<return_type> result = task->get_future();
 
         {
-            std::lock_guard<std::mutex> lock{queue_mutex_};
+            std::lock_guard lock{queue_mutex_};
             if (stop_)
             {
                 throw std::runtime_error("Submit on stopped ThreadPool");
             }
             ++pending_tasks_;
-            tasks_.emplace([task]() { (*task)(); });
+            tasks_.emplace([task] { (*task)(); });
         }
         cv_.notify_one();
 
@@ -159,7 +171,7 @@ namespace thread_pool
     template <typename Rep, typename Period>
     void ThreadPool::wait_all_with_timeout(std::chrono::duration<Rep, Period> timeout)
     {
-        std::unique_lock<std::mutex> lock{finished_mutex_};
+        std::unique_lock lock{finished_mutex_};
         finished_cv_.wait_for(lock, timeout, [this]
         {
             return active_task_count_ == 0 && pending_tasks_ == 0;

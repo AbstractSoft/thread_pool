@@ -190,6 +190,7 @@ TEST(ThreadPoolTest, WaitAllWithTimeoutExpires) {
     pool.wait_all_with_timeout(std::chrono::seconds(1));
     auto elapsed = std::chrono::steady_clock::now() - start;
 
+    EXPECT_GE(elapsed, std::chrono::milliseconds(900));
     EXPECT_LT(elapsed, std::chrono::seconds(2));
 }
 
@@ -205,6 +206,8 @@ TEST(ThreadPoolTest, NoTasksWaitAll) {
 // ── Active Tasks ───────────────────────────────────────────────────────────
 
 TEST(ThreadPoolTest, ActiveTasksDuringExecution) {
+    // active_task_count_ is incremented in pop_task() before the task runs,
+    // so by the time the lambda calls count_down() the counter is already 1.
     thread_pool::ThreadPool pool{1};
     std::latch started{1};
 
@@ -293,6 +296,49 @@ TEST(ThreadPoolTest, ClearPending) {
     // Pool should still accept new tasks after clearing
     auto result = pool.submit([] { return 42; });
     EXPECT_EQ(result.get(), 42);
+}
+
+TEST(ThreadPoolTest, ClearPendingFuturesBroken) {
+    thread_pool::ThreadPool pool{1};
+    std::latch started{1};
+
+    pool.submit([&started] {
+        started.count_down();
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    });
+    started.wait();
+
+    auto f = pool.submit([] { return 42; });
+    pool.clear_pending();
+
+    EXPECT_THROW(f.get(), std::future_error);
+}
+
+TEST(ThreadPoolTest, SubmitOnStoppedPool) {
+    thread_pool::ThreadPool pool{1};
+    pool.shutdown();
+    EXPECT_THROW(pool.submit([] {}), std::runtime_error);
+}
+
+TEST(ThreadPoolTest, ActiveTasksNeverExceedsThreadCount) {
+    constexpr std::size_t N = 4;
+    thread_pool::ThreadPool pool{N};
+    std::atomic<std::size_t> max_seen{0};
+
+    std::vector<std::future<void>> futures;
+    for (int i = 0; i < 50; ++i) {
+        futures.push_back(pool.submit([&pool, &max_seen] {
+            std::size_t cur = pool.active_tasks();
+            std::size_t prev = max_seen.load();
+            while (cur > prev && !max_seen.compare_exchange_weak(prev, cur)) {}
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }));
+    }
+
+    for (auto& f : futures) {
+        f.get();
+    }
+    EXPECT_LE(max_seen.load(), N);
 }
 
 // ── Concurrency ────────────────────────────────────────────────────────────

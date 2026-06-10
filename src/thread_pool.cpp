@@ -23,7 +23,7 @@ namespace thread_pool
         constexpr std::size_t default_num_threads = 8;
     } // namespace
 
-    ThreadPool::ThreadPool(std::size_t num_threads, const std::chrono::seconds default_timeout)
+    ThreadPool::ThreadPool(std::size_t num_threads, std::chrono::seconds default_timeout)
         : default_timeout_{default_timeout}
     {
         if (num_threads == 0)
@@ -39,8 +39,14 @@ namespace thread_pool
 
     ThreadPool::~ThreadPool()
     {
+        shutdown();
+    }
+
+    void ThreadPool::shutdown()
+    {
         {
             std::lock_guard lock{queue_mutex_};
+            if (stop_) { return; }
             stop_ = true;
         }
         cv_.notify_all();
@@ -75,7 +81,10 @@ namespace thread_pool
         while (true)
         {
             auto opt = pop_task();
-            if (!opt) return;
+            if (!opt)
+            {
+                return;
+            }
 
             try
             {
@@ -84,10 +93,10 @@ namespace thread_pool
             catch (...)
             {
                 // packaged_task::operator() stores user exceptions in the
-                // future and does not rethrow. A std::future_error (e.g.
-                // promise_already_satisfied, no_state) could be thrown if
-                // the packaged_task is invoked twice or has no shared state.
-                // Catch everything to prevent counter leaks and worker death.
+                // future and does not rethrow. However, system-level
+                // exceptions (std::bad_alloc, std::future_error) can arise
+                // from the wrapper infrastructure itself. The catch-all
+                // prevents counter leaks and worker death in all cases.
             }
 
             {
@@ -106,16 +115,11 @@ namespace thread_pool
 
     std::size_t ThreadPool::clear_pending()
     {
-        std::size_t count;
-        {
-            std::lock_guard lock{queue_mutex_};
-            count = tasks_.size();
-            tasks_ = {};
-        }
-        {
-            std::lock_guard lock{finished_mutex_};
-            pending_tasks_ -= count;
-        }
+        std::lock_guard lock_q{queue_mutex_};
+        std::lock_guard lock_f{finished_mutex_};
+        const std::size_t count = tasks_.size();
+        tasks_ = {};
+        pending_tasks_ -= count;
         finished_cv_.notify_all();
         return count;
     }
